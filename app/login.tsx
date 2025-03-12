@@ -27,7 +27,6 @@ import {
 } from "lucide-react-native";
 import authUtils from "./utils/authUtils";
 
-
 import { EXPO_PUBLIC_API_BASE_URL, TOKEN } from "@env";
 
 const Login = () => {
@@ -61,9 +60,9 @@ const Login = () => {
     if (!username.trim()) {
       newErrors.username = "Username is required";
       isValid = false;
-    } else if (username.includes("@") && !isValidEmail(username)) {
-      newErrors.username = "Invalid email format";
-      isValid = false;
+      // } else if (username.includes("@") && !isValidEmail(username)) {
+      //   newErrors.username = "Invalid email format";
+      //   isValid = false;
     }
 
     // Password validation
@@ -81,105 +80,27 @@ const Login = () => {
 
   // Handle login with proper API integration
   const handleLogin = async () => {
-    // Reset previous errors
-    setErrorMessage("");
-
-    // Validate inputs
-    if (!validateInputs()) {
-      return;
-    }
-
     try {
-      // Set loading state
-      setApiStatus("loading");
-
-      // Make API request with timeout for better error handling
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 seconds timeout
-
-      const response = await fetch(`${EXPO_PUBLIC_API_BASE_URL}/users/login`, {
+      // const response = await fetch(`${EXPO_PUBLIC_API_BASE_URL}/auth`, {
+      const response = await fetch(`http://172.16.1.10:5246/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password }),
-        signal: controller.signal,
       });
 
-      clearTimeout(timeoutId);
       const data = await response.json();
+      console.log("Backend Response:", data);
 
       if (response.ok) {
-        // Check if the server returned valid user data
-
-        if (data && data.id) {
-          // Store user session
-          await AsyncStorage.setItem("userData", JSON.stringify(data));
-          await authUtils.saveUserToken(TOKEN); // Save token to AsyncStorage
-
-          // Update status
-          setApiStatus("success");
-          // Clear any existing errors
-          setErrorMessage("");
-          // Navigate to the protected page after successful login
-          router.push("/profile");
-        } else {
-          // Handle invalid user data format
-          setApiStatus("error");
-          setErrorMessage("Invalid Credentials!");
-          Alert.alert("Login Failed", "Invalid Credentials!");
-        }
+        console.log("Login Successful:", data);
+        // Handle successful login (e.g., save token, navigate to another screen)
       } else {
-        // Handle different error status codes
-        setApiStatus("error");
-        if (response.status === 401) {
-          setErrorMessage("Invalid username or password");
-          Alert.alert("Login Failed", "Invalid username or password");
-        } else if (response.status === 403) {
-          setErrorMessage("Your account is locked. Please contact support.");
-          Alert.alert(
-            "Account Locked",
-            "Your account is locked. Please contact support."
-          );
-        } else if (response.status >= 500) {
-          setErrorMessage("Server error. Please try again later.");
-          Alert.alert(
-            "Server Error",
-            "Server is currently unavailable. Please try again later."
-          );
-        } else {
-          // Generic error message for other status codes
-          setErrorMessage(data?.message || "Login failed");
-          Alert.alert("Login Failed", data?.message || "Something went wrong");
-        }
+        console.log("Login Failed:", data);
+        // Handle failed login (e.g., show error message)
       }
     } catch (error) {
-      // Set error state
-      setApiStatus("error");
-
-      // Handle different error types
-      if (
-        error instanceof TypeError &&
-        error.message.includes("Network request failed")
-      ) {
-        setNetworkAvailable(false);
-        setErrorMessage(
-          "Network error. Please check your internet connection."
-        );
-        Alert.alert(
-          "Network Error",
-          "Please check your internet connection and try again."
-        );
-      } else if (error instanceof DOMException && error.name === "AbortError") {
-        setErrorMessage("Request timed out. Please try again.");
-        Alert.alert("Timeout", "Request timed out. Please try again.");
-      } else {
-        setErrorMessage("An unexpected error occurred. Please try again!");
-        Alert.alert("Error", "An unexpected error occurred. Please try again.");
-      }
-    } finally {
-      // Always clean up loading state
-      if (apiStatus === "loading") {
-        setApiStatus("idle");
-      }
+      console.error("Error during login:", error);
+      // Handle any unexpected errors
     }
   };
 
