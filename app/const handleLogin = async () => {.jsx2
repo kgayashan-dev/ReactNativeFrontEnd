@@ -1,0 +1,43 @@
+  const handleLogin = async () => {
+    try {
+      const response = await fetch(`http://172.16.1.10:5246/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+
+      const data = await response.json();
+      console.log("Backend Response:", data);
+
+      if (response.ok) {
+        console.log("Login Successful!");
+
+        // ✅ Extract the first object from the array
+        if (Array.isArray(data) && data.length > 0) {
+          const user = data[0]; // Get the first item in the array
+
+          const fullName = user.FullName; // "Test Login"
+          const userName = user.UserName; // "test"
+          const loginID = user.loginID; // "d2f42844-cb06-4968-84d7-db4d6452bc71"
+
+          console.log("User Full Name:", fullName);
+          console.log("Username:", userName);
+          console.log("Login ID:", loginID);
+
+          setUserName(fullName);
+
+          // Save user data to AsyncStorage (if needed)
+          // await AsyncStorage.setItem("user", JSON.stringify(user));
+
+          // Navigate to another screen or update state
+          // navigation.navigate("Home", { fullName, userName });
+        } else {
+          console.log("Invalid response format:", data);
+        }
+      } else {
+        console.log("Login Failed:", data);
+      }
+    } catch (error) {
+      console.error("Error during login:", error);
+    }
+  };
