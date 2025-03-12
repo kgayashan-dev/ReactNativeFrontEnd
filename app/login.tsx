@@ -30,7 +30,6 @@ import authUtils from "./utils/authUtils";
 import { EXPO_PUBLIC_API_BASE_URL, TOKEN } from "@env";
 
 const Login = () => {
-  const fakeToken = process.env.TOKEN;
   const router = useRouter();
 
   // State management
@@ -40,6 +39,7 @@ const Login = () => {
   const [apiStatus, setApiStatus] = useState("idle"); // idle, loading, success, error
   const [networkAvailable, setNetworkAvailable] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
+  const [loggedUser, setLoggedUser] = useState("");
   const [errors, setErrors] = useState({
     username: "",
     password: "",
@@ -60,9 +60,6 @@ const Login = () => {
     if (!username.trim()) {
       newErrors.username = "Username is required";
       isValid = false;
-      // } else if (username.includes("@") && !isValidEmail(username)) {
-      //   newErrors.username = "Invalid email format";
-      //   isValid = false;
     }
 
     // Password validation
@@ -80,27 +77,116 @@ const Login = () => {
 
   // Handle login with proper API integration
   const handleLogin = async () => {
+    // Reset previous errors
+    setErrorMessage("");
+  
+    // Validate inputs
+    if (!validateInputs()) {
+      return;
+    }
+  
     try {
-      // const response = await fetch(`${EXPO_PUBLIC_API_BASE_URL}/auth`, {
+      // Set loading state
+      setApiStatus("loading");
+  
+      // Make API request with timeout for better error handling
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 seconds timeout
+  
       const response = await fetch(`http://172.16.1.10:5246/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password }),
+        signal: controller.signal // This is important for the timeout to work
       });
-
-      const data = await response.json();
-      console.log("Backend Response:", data);
-
+  
+      clearTimeout(timeoutId); // Clear timeout after response is received
+      
+      const data = await response.json(); // Parse response after clearing timeout
+      
       if (response.ok) {
-        console.log("Login Successful:", data);
-        // Handle successful login (e.g., save token, navigate to another screen)
+        // Check if the server returned valid user data
+        if (Array.isArray(data) && data.length > 0) {
+          const user = data[0]; // Get the first item in the array
+          const fullName = user.FullName; // "Test Login"
+          console.log("User Full Name:", fullName);
+          setLoggedUser(fullName);
+          
+          // Also store the username in AsyncStorage for persistence
+          await AsyncStorage.setItem("userName", fullName);
+        }
+  
+        console.log(response, "Response");
+        if (data) {
+          // Store user session
+          await AsyncStorage.setItem("userData", JSON.stringify(data));
+  
+          // Update status
+          setApiStatus("success");
+          // Clear any existing errors
+          setErrorMessage("");
+          // Navigate to the protected page after successful login
+          router.push("/Receipt");
+        } else {
+          console.log("Error", response);
+          // Handle invalid user data format
+          setApiStatus("error");
+          setErrorMessage("Invalid Credentials!");
+          Alert.alert("Login Failed", "Invalid Credentials!");
+        }
       } else {
-        console.log("Login Failed:", data);
-        // Handle failed login (e.g., show error message)
+        // Handle different error status codes
+        setApiStatus("error");
+        if (response.status === 401) {
+          setErrorMessage("Invalid username or password");
+          Alert.alert("Login Failed", "Invalid username or password");
+        } else if (response.status === 403) {
+          setErrorMessage("Your account is locked. Please contact support.");
+          Alert.alert(
+            "Account Locked",
+            "Your account is locked. Please contact support."
+          );
+        } else if (response.status >= 500) {
+          setErrorMessage("Server error. Please try again later.");
+          Alert.alert(
+            "Server Error",
+            "Server is currently unavailable. Please try again later."
+          );
+        } else {
+          // Generic error message for other status codes
+          setErrorMessage(data?.message || "Login failed");
+          Alert.alert("Login Failed", data?.message || "Something went wrong");
+        }
       }
     } catch (error) {
-      console.error("Error during login:", error);
-      // Handle any unexpected errors
+      // Set error state
+      setApiStatus("error");
+  
+      // Handle different error types
+      if (
+        error instanceof TypeError &&
+        error.message.includes("Network request failed")
+      ) {
+        setNetworkAvailable(false);
+        setErrorMessage(
+          "Network error. Please check your internet connection."
+        );
+        Alert.alert(
+          "Network Error",
+          "Please check your internet connection and try again."
+        );
+      } else if (error instanceof DOMException && error.name === "AbortError") {
+        setErrorMessage("Request timed out. Please try again.");
+        Alert.alert("Timeout", "Request timed out. Please try again.");
+      } else {
+        setErrorMessage("An unexpected error occurred. Please try again!");
+        Alert.alert("Error", "An unexpected error occurred. Please try again.");
+      }
+    } finally {
+      // Always clean up loading state
+      if (apiStatus === "loading") {
+        setApiStatus("idle");
+      }
     }
   };
 
@@ -135,6 +221,8 @@ const Login = () => {
     setShowPassword(!showPassword);
   };
 
+  console.log(loggedUser);
+
   return (
     <SafeAreaView className="flex-1 bg-gradient-to-b from-blue-50 to-white">
       <KeyboardAvoidingView
@@ -152,8 +240,8 @@ const Login = () => {
               />
             </View>
 
-            <Text className="text-3xl font-bold text-gray-800 mb-2">
-              Welcome Back
+            <Text className="text-xl font-bold text-gray-800 mb-2">
+              Welcome Back {loggedUser}
             </Text>
             <Text className="text-gray-500 text-base">
               Please sign in to continue
